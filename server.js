@@ -1,12 +1,12 @@
 const express = require('express')
 var bodyParser = require('body-parser')
-//const cors = require('cors')
+const cors = require('cors')
 
 let call = require('./routes')
 
 const app = express()
 
-//app.use(cors())
+app.use(cors())
 app.use(bodyParser.json())
 //app.post('/code', ()=>console.log('got it in server'))
 

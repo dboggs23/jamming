@@ -1,76 +1,136 @@
 const express = require('express')
 const router = express.Router()
-//var SpotifyWebApi = require('spotify-web-api-node');
+var SpotifyWebApi = require('spotify-web-api-node');
 const spotify = require('./Spotify/authorization')
+const axios = require('axios')
 
-var showDialog = true
+let accessToken
+let refreshToken
 
-router.get('/authorize', (req, res) => {
-    var scope = spotify.scopes;
-    var authorizeURL = spotify.spotifyApi.createAuthorizeURL(scope)
-    res.send({url: authorizeURL})
-      
-  })
+router.get("/authorize", (req, res) => {
+  var scope = spotify.scopes;
+  var authorizeURL = spotify.spotifyApi.createAuthorizeURL(scope);
+  res.send({ url: authorizeURL });
+});
 
-  
-  /*router.get('/callback', function(req, res) {
-     // console.log(req.params)
-    var code = req.params.code;
-    console.log('\ncode:', code, '\n');
-     spotify.spotifyApi.authorizationCodeGrant(code).then(
-       function(data) {
-         console.log('The access token expires in ' + data.body['expires_in']);
-         console.log('The access token is ' + data.body['access_token']);
-  
-         spotify.spotifyApi.setAccessToken(data.body['access_token']);
-         spotify.spotifyApi.setRefreshToken(data.body['refresh_token']);
-  
-         tokenExpiration = new Data().getTime()/1000 + data.body['expires_in'];
-         login = 0;
-       },
-       function(err) {
-         console.log('Could not login!', err);
-       }
-     );
-    if(login == 0){
-      res.redirect('/#' +
-      querystring.stringify({
-        access_token: spotify.spotifyApi.getAccessToken(),
-        refresh_token: spotify.spotifyApi.getRefreshToken()
-      }));
-    }else{
-      res.redirect('/');
-    }
-  });*/
+router.get("/callback", (req, res) => {
+  code = req.query.code;
 
-  router.get("/callback", function (request, response) {
-      console.log('hit callback')
-    var authorizationCode = request.query.code;
-    console.log(authorizationCode)
-    
-    spotify.spotifyApi.authorizationCodeGrant(authorizationCode)
-    .then(function(data) {
-      console.log(data)
-      response.send(`/#access_token=${data.body['access_token']}&refresh_token=${data.body['refresh_token']}`)
-    }, function(err) {
-      console.log('Something went wrong when retrieving the access token!', err.message);
+  spotify.spotifyApi
+    .authorizationCodeGrant(code)
+    .then((data) => {
+      spotify.spotifyApi.setAccessToken(data.body["access_token"]);
+      accessToken = data.body["access_token"]
+      spotify.spotifyApi.setRefreshToken(data.body["refresh_token"]);
+      refreshToken = data.body["refresh_token"]
+      res.redirect("http://localhost:3000");
     })
-  })
 
-  /*router.get('/myendpoint', function (request, response) {
-    var loggedInSpotifyApi = new SpotifyWebApi();
-    console.log(request.headers['authorization'].split(' ')[1]);
-    loggedInSpotifyApi.setAccessToken(request.headers['authorization'].split(' ')[1]);
-    // Search for a track!
-    loggedInSpotifyApi.getMyTopTracks()
-      .then(function(data) {
-        console.log(data.body);
-        response.send(data.body);
-      }, function(err) {
-        console.error(err);
-      });
+    .catch((err) => {
+      console.log("houston, something something problem", err);
+    });
+});
+
+router.get("/myendpoint", function (request, response) {
+  let vampireWeekendID = "5BvJzeQpmsdsFp4HGUYUEx";
+  spotify.spotifyApi.refreshAccessToken()
+    .then(data=>{
+        console.log('refreshed access token')
+        spotify.spotifyApi.setAccessToken(data.body['access_token'])
+    })
+    .catch(err=>console.log(err))
+
+    spotify.spotifyApi.getArtistAlbums(vampireWeekendID)
+        .then(res=>response.send(res))
+});
+
+router.get('/search', (req, res)=>{
+
+  spotify.spotifyApi.refreshAccessToken()
+    .then(data=>{
+        console.log('refreshed access token')
+        spotify.spotifyApi.setAccessToken(data.body['access_token'])
+    })
+    .catch(err=>console.log(err))
+
+    spotify.spotifyApi.searchArtists(req.query.search)
+      .then(data=>res.send(data.body.artists.items))
+      .catch(err=>console.log(err))
+
+})
+
+router.get('/getTopSongs', (req, res)=>{
+  spotify.spotifyApi.refreshAccessToken()
+    .then(data=>{
+        console.log('refreshed access token')
+        spotify.spotifyApi.setAccessToken(data.body['access_token'])
+    })
+    .catch(err=>console.log(err))
+
+    spotify.spotifyApi.getArtistTopTracks(req.query.artist, 'US')
+      .then(data=>res.send(data.body.tracks))
+      .catch(err=>console.log(err))
+
+})
+
+router.get('/fullSearch',(req, res)=>{
+
+  //let accessToken
+
+  let artist = req.query.artist
+  let song = req.query.track
+  let instrumentalness
+  let acousticness
+  let danceability 
+  let energy
+  let loudness
+  let valence
+  let mode
+  let tempo
+
+  if(req.query.instrumentalness) instrumentalness = req.query.instrumentalness
+  if(req.query.acousticness) acousticness = req.query.acousticness
+  if(req.query.danceability) danceability = req.query.danceability
+  if(req.query.energy) energy = req.query.energy
+  if(req.query.loudness) loudness = req.query.loudness
+  if(req.query.valence) valence = req.query.valence
+  if(req.query.mode) mode = req.query.mode
+  if(req.query.tempo) tempo = req.query.tempo
+
+  //&target_instrumentalness=${instrumentalness}&target_acousticness=${acousticness}&target_energy=${energy}&target_loudness=${loudness}&target_valence=${valence}&target_mode=${mode}&target_tempo=${tempo}
+
+  spotify.spotifyApi.refreshAccessToken()
+    .then(data=>{
+        console.log('refreshed access token')
+        accessToken = data.body['access_token']
+        spotify.spotifyApi.setAccessToken(data.body['access_token'])
+
+      const headers = { Authorization: `Bearer ${accessToken}` }
+      let request = `https://api.spotify.com/v1/recommendations?limit=10&seed_artists=${artist}&seed_tracks=${song}`
+
+      if(instrumentalness) request += `&target_instumentalness=${instrumentalness}`
+      if(acousticness) request += `&target_acousticness=${acousticness}` 
+      if(danceability) request += `&target_danceability=${danceability}` 
+      if(energy) request += `&target_energy=${energy}`  
+      if(loudness) request += `&target_loudness=${loudness}`  
+      if(valence) request += `&target_valence=${valence}`  
+      if(mode) request += `&target_mode=${mode}` 
+      if(tempo) request += `&target_tempo=${tempo}` 
+      
+      axios.get(request, {headers: headers})
+        .then(response=>res.send(response.data.tracks))
+        .catch(err=>console.log(err))
+    })
+
+    .catch(err=>console.log(err))
+
     
-  });*/
+  
+})
+
+  
+
+
 
 
 
